@@ -1,0 +1,293 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+using Photon.Pun;
+public class PlayerController : MonoBehaviourPunCallbacks
+{
+    bool isPistol, isRifle, isMiniGun;
+    [SerializeField] GameObject pistol, rifle, miniGun;
+    [SerializeField] Image pistolUI, rifleUI, miniGunUI, cusror;
+    [SerializeField] float movementSpeed = 5f;
+    [SerializeField] float shiftSpeed = 10f;
+    [SerializeField] float jumpForce = 7f;
+    //Ссылка на источник звука
+    [SerializeField] AudioSource characterSounds;
+    //Ссылка на звук прыжка
+    [SerializeField] AudioClip jump, damage;
+    float currentSpeed;
+    float stamina = 5f;
+    private int health;
+    Rigidbody rb;
+    Animator anim;
+    Vector3 direction;
+    bool isGrounded = true;
+    public bool dead;
+    TextUpdate textUpdate;
+    [SerializeField] GameObject damageUi;
+
+    public enum Weapons
+    {
+        None,
+        Pistol,
+        Rifle,
+        MiniGun
+    }
+    Weapons weapons = Weapons.None;
+
+    public void GetDamage(int count)
+    {
+        photonView.RPC("ChangeHealth", RpcTarget.All, count);
+    }
+
+    [PunRPC]
+    public void ChangeHealth(int count)
+    {
+        textUpdate.SetHealth(health);
+        //вычитаем здоровье
+        health -= count;
+        //Отключаем звук бега
+        characterSounds.Stop();
+        //Создаем временный источник звука для прыжка
+        AudioSource.PlayClipAtPoint(damage, transform.position);
+        //если здоровье меньше либо равно нулю, то...
+
+        damageUi.SetActive(true);
+        Invoke("RemoveDamageUi", 0.3f);
+
+        if (health <= 0)
+        {
+            gameManager.ChangePlayersList();
+            dead = true;
+            //Активируем анимацию смерти
+            anim.SetBool("Die", true);
+            transform.Find("Main Camera").GetComponent<ThirdPersonCamera>().isSpectator = true;
+            //Убираем оружие
+            ChooseWeapon(Weapons.None);
+            //отключаем скрипт PlayerController, чтобы персонаж не мог передвигаться
+            this.enabled = false;
+            
+        }
+    }
+
+    void RemoveDamageUi()
+    {
+        damageUi.SetActive(false);
+    }
+
+    GameManager gameManager;
+
+    void Start()
+    {
+        gameManager = FindObjectOfType<GameManager>();
+        gameManager.ChangePlayersList();
+
+        rb = GetComponent<Rigidbody>();
+        anim = GetComponent<Animator>();
+        currentSpeed = movementSpeed;
+        health = 100;
+        textUpdate = GetComponent<TextUpdate>();
+
+        //Если персонаж не наш, то...
+        if (!photonView.IsMine)
+        {
+            //Находим камеру в иерархии игрока и отключаем её
+            transform.Find("Main Camera").gameObject.SetActive(false);
+            transform.Find("Canvas").gameObject.SetActive(false);
+            //отключаем скрипт PlayerController
+            this.enabled = false;
+        }
+    }
+    void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.Alpha1) && isPistol)
+        {
+            photonView.RPC("ChooseWeapon", RpcTarget.All, Weapons.Pistol);
+        }
+        if (Input.GetKeyDown(KeyCode.Alpha2) && isRifle)
+        {
+            photonView.RPC("ChooseWeapon", RpcTarget.All, Weapons.Rifle);
+        }
+        if (Input.GetKeyDown(KeyCode.Alpha3) && isMiniGun)
+        {
+            photonView.RPC("ChooseWeapon", RpcTarget.All, Weapons.MiniGun);
+        }
+        if (Input.GetKeyDown(KeyCode.Alpha0))
+        {
+            photonView.RPC("ChooseWeapon", RpcTarget.All, Weapons.None);
+        }
+
+        if (Input.GetKeyDown(KeyCode.Alpha4))
+        {
+            photonView.RPC("ChooseWeapon", RpcTarget.All, Weapons.None);
+        }
+        if (Input.GetKeyDown(KeyCode.Alpha5))
+        {
+            photonView.RPC("ChooseWeapon", RpcTarget.All, Weapons.None);
+        }
+        if (Input.GetKeyDown(KeyCode.Alpha6))
+        {
+            photonView.RPC("ChooseWeapon", RpcTarget.All, Weapons.None);
+        }
+        if (Input.GetKeyDown(KeyCode.Alpha7))
+        {
+            photonView.RPC("ChooseWeapon", RpcTarget.All, Weapons.None);
+        }
+        if (Input.GetKeyDown(KeyCode.Alpha8))
+        {
+            photonView.RPC("ChooseWeapon", RpcTarget.All, Weapons.None);
+        }
+        if (Input.GetKeyDown(KeyCode.Alpha9))
+        {
+            photonView.RPC("ChooseWeapon", RpcTarget.All, Weapons.None);
+        }
+
+
+        float moveHorizontal = Input.GetAxis("Horizontal"); // A, D, left, right
+        float moveVertical = Input.GetAxis("Vertical"); // W, S, up, down
+
+        direction = new Vector3(moveHorizontal, 0.0f, moveVertical);
+        direction = transform.TransformDirection(direction);
+
+        if (Input.GetKeyDown(KeyCode.Space) && isGrounded)
+        {
+            rb.AddForce(new Vector3(0, jumpForce, 0), ForceMode.Impulse);
+            isGrounded = false;
+            anim.SetBool("Jump", true);
+
+            //Отключаем звук бега
+            characterSounds.Stop();
+            //Создаем временный источник звука для прыжка
+            AudioSource.PlayClipAtPoint(jump, transform.position);
+        }
+
+        if (Input.GetKey(KeyCode.LeftShift))
+        {
+            if (stamina > 0)
+            {
+                stamina -= Time.deltaTime;
+                currentSpeed = shiftSpeed;
+            }
+            else
+            {
+                currentSpeed = movementSpeed;
+            }
+        }
+        else if (!Input.GetKey(KeyCode.LeftShift))
+        {
+            stamina += Time.deltaTime;
+            currentSpeed = movementSpeed;
+        }
+
+        if (stamina > 5f)
+        {
+            stamina = 5f;
+        }
+        else if (stamina < 0)
+        {
+            stamina = 0;
+        }
+
+        //Если источник звука не воспроизводит звук и мы на земле, то...
+        if (!characterSounds.isPlaying && isGrounded)
+        {
+            //Включаем звук
+            characterSounds.Play();
+        }
+
+        if (direction.x != 0 || direction.z != 0)
+        {
+            anim.SetBool("Run", true);
+        }
+        if (direction.x == 0 && direction.z == 0)
+        {
+            anim.SetBool("Run", false);
+
+            //Отключаем звук, если мы останавились
+            characterSounds.Stop();
+        }
+    }
+
+    void FixedUpdate()
+    {
+        rb.MovePosition(transform.position + direction * currentSpeed * Time.deltaTime);
+    }
+
+    private void OnCollisionEnter(Collision collision)
+    {
+        isGrounded = true;
+        anim.SetBool("Jump", false);
+    }
+
+    [PunRPC]
+    public void ChooseWeapon(Weapons weapons)
+    {
+        if (weapons != Weapons.None)
+        {
+            cusror.enabled = true;
+        }
+        else
+        {
+            cusror.enabled = false;
+        }
+        anim.SetBool("Pistol", weapons == Weapons.Pistol);
+        anim.SetBool("Assault", weapons == Weapons.Rifle);
+        anim.SetBool("MiniGun", weapons == Weapons.MiniGun);
+        anim.SetBool("NoWeapon", weapons == Weapons.None);
+        pistol.SetActive(weapons == Weapons.Pistol);
+        rifle.SetActive(weapons == Weapons.Rifle);
+        miniGun.SetActive(weapons == Weapons.MiniGun);
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        switch (other.gameObject.tag)
+        {
+            case "pistol":
+                if (!isPistol)
+                {
+                    isPistol = true;
+                    ChooseWeapon(Weapons.Pistol);
+                    pistolUI.color = Color.white;
+                }
+                break;
+            case "rifle":
+                if (!isRifle)
+                {
+                    isRifle = true;
+                    ChooseWeapon(Weapons.Rifle);
+                    rifleUI.color = Color.white;
+                }
+                break;
+            case "minigun":
+                if (!isMiniGun)
+                {
+                    isMiniGun = true;
+                    ChooseWeapon(Weapons.MiniGun);
+                    miniGunUI.color = Color.white;
+                }
+                break;
+            default:
+                break;
+
+            case "ammoPistol":
+                pistol.GetComponent<Weapon>().AddAmmo(50);
+                break;
+            case "ammoRifle":
+                rifle.GetComponent<Weapon>().AddAmmo(100);
+                break;
+            case "ammoMinigun":
+                miniGun.GetComponent<Weapon>().AddAmmo(150);
+                break;
+
+            case "medkit":
+                int needHealth = 100 - health;
+                ChangeHealth(-needHealth);
+                break;
+
+        }
+        Destroy(other.gameObject);
+    }
+
+
+}
